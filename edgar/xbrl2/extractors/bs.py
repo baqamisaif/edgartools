@@ -229,10 +229,14 @@ def fallback_xbrl_query_facts(company: Company, needed_concepts: Set[str], force
 # -------------------------
 
 def main():
+    from pathlib import Path
+    script_dir = Path(__file__).parent
+    default_mapping = script_dir.parent / "schemas" / "balance-sheet.json"
+
     ap = argparse.ArgumentParser()
     ap.add_argument("--symbol", required=True)
     ap.add_argument("--form", default="10-K", choices=["10-K", "10-Q"])
-    ap.add_argument("--mapping", default="../schemas/balance-sheet.json")
+    ap.add_argument("--mapping", default=str(default_mapping))
     ap.add_argument("--identity", default="User user@example.com")
     ap.add_argument("--industry", default=None)
     ap.add_argument("--period-end", default=None)
