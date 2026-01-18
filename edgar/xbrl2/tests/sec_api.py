@@ -1,6 +1,6 @@
 """
 SEC Data Fetcher with Caching
-Runs is.py, bs.py, cf.py and caches combined output as {ticker}_sec.json
+Runs ic.py, bs.py, cf.py and caches combined output as {ticker}_sec.json
 """
 
 import subprocess
@@ -68,7 +68,7 @@ def fetch_sec_data(ticker: str, form: str = "10-K", force_refresh: bool = False)
     
     print(f"[SEC Fetch] Running extractors for {ticker}...")
     
-    income_statement = _run_extractor("is.py", ticker, form)
+    income_statement = _run_extractor("ic.py", ticker, form)
     balance_sheet = _run_extractor("bs.py", ticker, form)
     cash_flow = _run_extractor("cf.py", ticker, form)
     

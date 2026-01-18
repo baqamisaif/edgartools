@@ -1,5 +1,5 @@
 """
-Compare SEC (is.py) and Nasdaq Income Statement Data
+Compare SEC (ic.py) and Nasdaq Income Statement Data
 Uses nasdaq_api.py for cached API access and saves reports by ticker name.
 """
 
@@ -11,9 +11,9 @@ import re
 from typing import Dict, Any
 
 # Import cached API
-from nasdaq_api import get_income_statement
+from nasdaq_api import fetch_nasdaq_data
 
-# Map is.py keys to Nasdaq JSON keys
+# Map ic.py keys to Nasdaq JSON keys
 KEY_MAPPING = {
     "revenue": "Total Revenue",
     "costOfGoodsSold": "Cost of Revenue",
@@ -49,11 +49,14 @@ def parse_currency_str(curr_str: str) -> float:
 
 def get_nasdaq_data(ticker: str, frequency: str = "annual") -> Dict[str, str]:
     """Fetches Nasdaq data using cached API."""
-    return get_income_statement(ticker, frequency)
+    data = fetch_nasdaq_data(ticker)
+    if data:
+        return data.get("income_statement", {})
+    return {}
 
 def get_sec_data(ticker: str, form: str = "10-K") -> Dict[str, Any]:
-    """Runs is.py to get SEC data."""
-    script_path = os.path.join(EXTRACTORS_DIR, "is.py")
+    """Runs ic.py to get SEC data."""
+    script_path = os.path.join(EXTRACTORS_DIR, "ic.py")
     cmd = [sys.executable, script_path, "--symbol", ticker, "--form", form]
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
@@ -68,9 +71,9 @@ def get_sec_data(ticker: str, form: str = "10-K") -> Dict[str, Any]:
         if data.get("financials"):
             return data["financials"][0]
     except subprocess.CalledProcessError as e:
-        print(f"Error running is.py: {e.stderr}")
+        print(f"Error running ic.py: {e.stderr}")
     except Exception as e:
-        print(f"Error parsing is.py output: {e}")
+        print(f"Error parsing ic.py output: {e}")
     return {}
 
 def compare(ticker: str, frequency: str = "annual"):
