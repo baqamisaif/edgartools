@@ -1700,6 +1700,138 @@ class Filing:
                 )
             raise
 
+    def standardized_financials(self, industry: str = None) -> Optional[dict]:
+        """
+        Extract standardized financial data using xbrl2 schema-based extraction.
+
+        Returns a dictionary with standardized fields for income statement,
+        balance sheet, and cash flow statement. Uses sector-aware mapping
+        with fallback chains for robust extraction across different company types.
+
+        Args:
+            industry: Optional industry hint for sector-specific rules
+                     (e.g., "Bank", "Insurance", "Utility")
+
+        Returns:
+            Dictionary with keys:
+                - income_statement: dict with revenue, netIncome, ebit, eps, etc.
+                - balance_sheet: dict with totalAssets, totalLiabilities, etc.
+                - cash_flow: dict with operatingCashFlow, freeCashFlow, etc.
+                - meta: extraction metadata (form, period, extraction_rate)
+
+            Returns None if XBRL data is not available.
+
+        Example:
+            >>> filing = company.get_filings(form="10-K").latest()
+            >>> data = filing.standardized_financials()
+            >>> print(f"Revenue: ${data['income_statement']['revenue']:,.0f}")
+            >>> print(f"Net Income: ${data['income_statement']['netIncome']:,.0f}")
+
+            # With industry hint for banks
+            >>> data = filing.standardized_financials(industry="Bank")
+        """
+        try:
+            from edgar.xbrl2.extractors.ic import (
+                Evaluator as ICEvaluator,
+                try_income_statement_df,
+                build_facts_from_statement_df,
+                pick_period_end_from_statement_df,
+            )
+            from edgar.xbrl2.extractors.bs import (
+                Evaluator as BSEvaluator,
+                try_balance_sheet_df,
+            )
+            from edgar.xbrl2.extractors.cf import (
+                Evaluator as CFEvaluator,
+                try_cash_flow_df,
+            )
+            import json
+            from pathlib import Path
+
+            # Determine form type
+            form = "10-K" if "10-K" in self.form else "10-Q"
+
+            # Load schemas
+            schema_dir = Path(__file__).parent / "xbrl2" / "schemas"
+            with open(schema_dir / "income-statement.json") as f:
+                ic_mapping = json.load(f)
+            with open(schema_dir / "balance-sheet.json") as f:
+                bs_mapping = json.load(f)
+            with open(schema_dir / "cash-flow.json") as f:
+                cf_mapping = json.load(f)
+
+            # Get company for extraction functions
+            from edgar import Company
+            company = Company(self.cik)
+
+            result = {
+                "income_statement": {},
+                "balance_sheet": {},
+                "cash_flow": {},
+                "meta": {
+                    "form": self.form,
+                    "period": None,
+                    "accession": self.accession_no,
+                }
+            }
+
+            # Extract Income Statement
+            try:
+                df_stmt, period_end = try_income_statement_df(company, form=form)
+                if df_stmt is not None and not df_stmt.empty:
+                    header = pick_period_end_from_statement_df(df_stmt, None, form)
+                    facts = build_facts_from_statement_df(df_stmt, header)
+                    evaluator = ICEvaluator(mapping=ic_mapping, facts=facts, industry=industry, normalize_abs=True)
+                    result["income_statement"] = evaluator.standardize()
+                    result["meta"]["period"] = period_end
+            except Exception as e:
+                log.debug(f"Income statement extraction failed: {e}")
+
+            # Extract Balance Sheet
+            try:
+                df_stmt, period_end = try_balance_sheet_df(company, form=form)
+                if df_stmt is not None and not df_stmt.empty:
+                    header = pick_period_end_from_statement_df(df_stmt, None, form)
+                    facts = build_facts_from_statement_df(df_stmt, header)
+                    evaluator = BSEvaluator(mapping=bs_mapping, facts=facts, industry=industry, normalize_abs=True)
+                    result["balance_sheet"] = evaluator.standardize()
+            except Exception as e:
+                log.debug(f"Balance sheet extraction failed: {e}")
+
+            # Extract Cash Flow
+            try:
+                df_stmt, period_end = try_cash_flow_df(company, form=form)
+                if df_stmt is not None and not df_stmt.empty:
+                    header = pick_period_end_from_statement_df(df_stmt, None, form)
+                    facts = build_facts_from_statement_df(df_stmt, header)
+                    evaluator = CFEvaluator(mapping=cf_mapping, facts=facts, industry=industry, normalize_abs=True)
+                    result["cash_flow"] = evaluator.standardize()
+            except Exception as e:
+                log.debug(f"Cash flow extraction failed: {e}")
+
+            # Calculate extraction rates
+            total_fields = 0
+            extracted_fields = 0
+            for stmt in ["income_statement", "balance_sheet", "cash_flow"]:
+                for value in result[stmt].values():
+                    total_fields += 1
+                    if value is not None:
+                        extracted_fields += 1
+
+            if total_fields > 0:
+                result["meta"]["extraction_rate"] = f"{extracted_fields / total_fields:.1%}"
+            else:
+                result["meta"]["extraction_rate"] = "0.0%"
+
+            return result
+
+        except ImportError:
+            log.warning("xbrl2 package not available. Install with: pip install edgartools[xbrl2]")
+            return None
+        except Exception as e:
+            log.debug(f"Standardized financials extraction failed: {e}")
+            return None
+
     def serve(self, port: int = 8000) -> AttachmentServer:
         """Serve the filings on a local server
         port: The port to serve the filings on

@@ -16,6 +16,81 @@ from edgar.xbrl2 import (
 
 ## Quick Start
 
+### Filing Integration (Recommended)
+
+The easiest way to use xbrl2 is through the `Filing.standardized_financials()` method:
+
+```python
+from edgar import Company
+
+# Get a filing
+company = Company("AAPL")
+filing = company.get_filings(form="10-K").latest()
+
+# Extract standardized financials (all 3 statements at once)
+data = filing.standardized_financials()
+
+# Access income statement fields
+print(f"Revenue: ${data['income_statement']['revenue']:,.0f}")
+print(f"Net Income: ${data['income_statement']['netIncome']:,.0f}")
+print(f"EPS: ${data['income_statement']['earningsPerShareBasic']:.2f}")
+
+# Access balance sheet fields
+print(f"Total Assets: ${data['balance_sheet']['totalAssets']:,.0f}")
+print(f"Total Equity: ${data['balance_sheet']['totalEquity']:,.0f}")
+
+# Access cash flow fields
+print(f"Operating Cash Flow: ${data['cash_flow']['operatingCashFlow']:,.0f}")
+print(f"Free Cash Flow: ${data['cash_flow']['freeCashFlow']:,.0f}")
+
+# Check extraction metadata
+print(f"Extraction Rate: {data['meta']['extraction_rate']}")
+```
+
+**With Industry Hints (for banks, insurance, utilities):**
+
+```python
+# For banks - uses interest income/expense rules
+filing = Company("JPM").get_filings(form="10-K").latest()
+data = filing.standardized_financials(industry="Bank")
+
+# For insurance companies
+filing = Company("MET").get_filings(form="10-K").latest()
+data = filing.standardized_financials(industry="Insurance")
+```
+
+**Output Structure:**
+
+```python
+{
+    "income_statement": {
+        "revenue": 391035000000.0,
+        "netIncome": 96995000000.0,
+        "earningsPerShareBasic": 6.16,
+        # ... 25 fields total
+    },
+    "balance_sheet": {
+        "totalAssets": 352583000000.0,
+        "totalLiabilities": 290437000000.0,
+        "totalEquity": 62146000000.0,
+        # ... 39 fields total
+    },
+    "cash_flow": {
+        "operatingCashFlow": 118254000000.0,
+        "freeCashFlow": 99584000000.0,
+        # ... 33 fields total
+    },
+    "meta": {
+        "form": "10-K",
+        "period": "2024-09-28",
+        "accession": "0000320193-24-000123",
+        "extraction_rate": "64.9%"
+    }
+}
+```
+
+---
+
 ### 1. Sector Lookup
 
 ```python
